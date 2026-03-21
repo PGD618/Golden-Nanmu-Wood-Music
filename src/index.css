@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  overflow: hidden;
+  /* 隐藏滚动条，播放器通常是固定窗口 */
+  user-select: none;
+  /* 禁止选中文本，让它更像原生软件 */
+}
