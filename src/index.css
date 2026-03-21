@@ -1,28 +1,47 @@
 @import "tailwindcss";
 
+/* --- 全局滚动条美化 --- */
+
+/* 1. 滚动条整体部分 */
+::-webkit-scrollbar {
+  width: 6px;
+  /* 纵向滚动条宽度 */
+  height: 6px;
+  /* 横向滚动条高度 */
+}
+
+/* 2. 滚动条轨道 (背景) */
+::-webkit-scrollbar-track {
+  background: transparent;
+  /* 轨道设为透明，不破坏整体感 */
+}
+
+/* 3. 滚动条滑块 (滑动的那个部分) */
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  /* 半透明白色 */
+  border-radius: 10px;
+  /* 极简圆角 */
+  transition: all 0.3s ease;
+}
+
+/* 4. 鼠标悬停在滑块上时 */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+  /* 悬停时稍微亮一点，增加交互感 */
+}
+
+/* 5. 当我们在容器上添加 .custom-scrollbar 类时，可以做更细致的控制 */
+.custom-scrollbar {
+  scrollbar-gutter: stable;
+  /* 防止滚动条出现时内容抖动 */
+}
+
+/* --- 基础样式重置 --- */
 body {
   margin: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: transparent;
-  /* 重要：让窗口背景透明 */
   overflow: hidden;
-}
-
-/* 自定义滚动条样式 */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  /* 外部容器不滚动 */
+  user-select: none;
+  /* 播放器通常禁止文字选中，更有原生应用感 */
 }
