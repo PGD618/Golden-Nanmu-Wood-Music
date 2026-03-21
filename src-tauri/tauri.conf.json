@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "golden-nanmu-wood-music",
-        "width": 800,
-        "height": 600
+        "title": "Music Player",
+        "width": 1000,
+        "height": 700,
+        "transparent": false,
+        "decorations": true
       }
     ],
     "security": {
