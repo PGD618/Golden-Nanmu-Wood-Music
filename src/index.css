@@ -37,6 +37,25 @@
   /* 防止滚动条出现时内容抖动 */
 }
 
+/* 歌词区域的上下渐变消失效果 */
+.mask-linear-fade {
+  mask-image: linear-gradient(to bottom,
+      transparent 0%,
+      black 20%,
+      black 80%,
+      transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom,
+      transparent 0%,
+      black 20%,
+      black 80%,
+      transparent 100%);
+}
+
+/* 隐藏歌词区域滚动条，但保留滚动功能 */
+.custom-scrollbar-lyrics::-webkit-scrollbar {
+  display: none;
+}
+
 /* --- 基础样式重置 --- */
 body {
   margin: 0;

@@ -9,6 +9,9 @@
     "core:default",
     "dialog:default",
     "fs:default",
-    "opener:default"
+    "opener:default",
+    "core:event:default",
+    "core:path:default",
+    "core:webview:default"
   ]
 }
