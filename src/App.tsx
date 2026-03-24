@@ -7,6 +7,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import logo from './assets/logo.png';
 
 // --- 类型定义 ---
 interface Track {
@@ -29,12 +30,13 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playMode, setPlayMode] = useState<'sequence' | 'shuffle' | 'loop'>('sequence');
 
-  // 详情页、音量与进度状态
+  // 状态管理
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [progress, setProgress] = useState(0);
   const [rawTime, setRawTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isDragging, setIsDragging] = useState(false); // 进度条拖拽锁
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentTrack = currentIdx >= 0 ? tracks[currentIdx] : null;
@@ -86,7 +88,7 @@ const App: React.FC = () => {
     audioRef.current.src = convertFileSrc(tracks[index].path);
     audioRef.current.volume = volume;
     audioRef.current.play();
-    setIsPlaying(true);
+    // 状态将由 onPlay/onPause 自动同步
   };
 
   const handleNext = () => {
@@ -96,34 +98,47 @@ const App: React.FC = () => {
   };
 
   const formatTime = (s: number) => {
+    if (isNaN(s)) return "0:00";
     const m = Math.floor(s / 60);
     const secs = Math.floor(s % 60);
     return `${m}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  // 播放模式切换组件（复用）
+  const ModeIcon = () => (
+    <button onClick={() => setPlayMode(prev => prev === 'sequence' ? 'shuffle' : prev === 'shuffle' ? 'loop' : 'sequence')} className="hover:text-amber-500 transition active:scale-90">
+      {playMode === 'sequence' && <Repeat size={20} className="text-white/40" />}
+      {playMode === 'shuffle' && <Shuffle size={20} className="text-amber-500" />}
+      {playMode === 'loop' && <Repeat1 size={20} className="text-amber-500" />}
+    </button>
+  );
+
   return (
     <div className="h-screen w-screen bg-[#020617] text-white overflow-hidden flex items-center justify-center p-4 select-none">
       <audio
         ref={audioRef}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
         onTimeUpdate={() => {
-          if (audioRef.current) {
-            setRawTime(audioRef.current.currentTime);
-            setDuration(audioRef.current.duration || 0);
-            setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100 || 0);
+          if (audioRef.current && !isDragging) {
+            const cur = audioRef.current.currentTime;
+            const dur = audioRef.current.duration || 0;
+            setRawTime(cur);
+            setDuration(dur);
+            setProgress(dur > 0 ? (cur / dur) * 100 : 0);
           }
         }}
         onEnded={() => playMode === 'loop' ? playAtIndex(currentIdx) : handleNext()}
       />
 
       {/* --- 全屏详情页 --- */}
-      <div className={`fixed inset-0 z-100 bg-black transition-all duration-700 ease-in-out transform ${isDetailOpen ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'
-        }`}>
+      <div className={`fixed inset-0 z-100 bg-black transition-all duration-700 ease-in-out transform ${isDetailOpen ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'}`}>
         <div className="absolute inset-0 opacity-30 blur-[120px] scale-150 transition-all duration-1000" style={{ background: currentTrack?.cover ? `url(${currentTrack.cover}) center/cover no-repeat` : '#1e293b' }} />
-        <div className="relative h-full w-full flex flex-col p-10 max-w-7xl mx-auto">
+        <div className="relative h-full w-full flex flex-col p-10 max-w-[1600px] mx-auto">
           <header className="flex justify-between items-center mb-10 shrink-0">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-amber-600 rounded-lg flex items-center justify-center shadow-lg overflow-hidden">
-                <img src="/logo.png" className="w-8 h-8 object-contain" alt="Logo" />
+                <img src={logo} className="w-8 h-8 object-contain" alt="Logo" />
               </div>
               <h1 className="text-xl font-bold tracking-widest text-amber-500">金丝楠音乐</h1>
             </div>
@@ -135,7 +150,7 @@ const App: React.FC = () => {
           <div className="flex-1 flex flex-col md:flex-row items-center gap-10 md:gap-20 overflow-hidden">
             <div className="w-[280px] md:w-[420px] shrink-0 flex flex-col items-center text-center md:text-left">
               <div className={`w-full aspect-square rounded-3xl overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.6)] transition-all duration-1000 ${isPlaying ? 'scale-100' : 'scale-90 opacity-60'}`}>
-                {currentTrack?.cover ? <img src={currentTrack.cover} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-800 flex items-center justify-center"><img src="/logo.png" className="w-32 h-32 opacity-10 object-contain" /></div>}
+                {currentTrack?.cover ? <img src={currentTrack.cover} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-800 flex items-center justify-center"><img src={logo} className="w-32 h-32 opacity-10 object-contain" /></div>}
               </div>
               <div className="mt-10 w-full">
                 <h2 className="text-3xl md:text-4xl font-bold mb-2 truncate px-4 md:px-0">{currentTrack?.name || "未选择歌曲"}</h2>
@@ -156,110 +171,148 @@ const App: React.FC = () => {
           <footer className="mt-10 shrink-0 space-y-6">
             <div className="flex items-center gap-4">
               <span className="text-xs font-mono text-white/40 w-12">{formatTime(rawTime)}</span>
-              <input type="range" min="0" max="100" value={progress} onChange={(e) => {
-                if (audioRef.current) audioRef.current.currentTime = (parseFloat(e.target.value) / 100) * audioRef.current.duration;
-              }} className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-amber-500" />
+              <input
+                type="range" min="0" max="100" step="0.01"
+                value={progress}
+                onMouseDown={() => setIsDragging(true)}
+                onMouseUp={() => setIsDragging(false)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setProgress(val);
+                  if (audioRef.current) {
+                    const newTime = (val / 100) * audioRef.current.duration;
+                    setRawTime(newTime);
+                    audioRef.current.currentTime = newTime;
+                  }
+                }}
+                style={{ background: `linear-gradient(to right, #f59e0b ${progress}%, rgba(255,255,255,0.1) ${progress}%)` }}
+                className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-transparent slider-thumb-custom"
+              />
               <span className="text-xs font-mono text-white/40 w-12">{formatTime(duration)}</span>
             </div>
-            <div className="flex justify-center items-center gap-10">
+            {/* 增强详情页控制栏 */}
+            <div className="flex justify-center items-center gap-12">
+              <ModeIcon />
               <SkipBack onClick={() => playAtIndex((currentIdx - 1 + tracks.length) % tracks.length)} size={32} className="cursor-pointer hover:text-amber-500 transition-colors" />
               <button onClick={() => isPlaying ? audioRef.current?.pause() : audioRef.current?.play()} className="w-20 h-20 bg-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition shadow-2xl">
                 {isPlaying ? <Pause size={36} className="text-black" /> : <Play size={36} className="text-black ml-1" />}
               </button>
               <SkipForward onClick={() => playAtIndex((currentIdx + 1) % tracks.length)} size={32} className="cursor-pointer hover:text-amber-500 transition-colors" />
+              <button className="hover:text-pink-500 transition active:scale-90 text-white/40"><Heart size={24} /></button>
             </div>
           </footer>
         </div>
       </div>
 
       {/* --- 主界面 --- */}
-      <div className="w-full h-full max-w-[1280px] max-h-[900px] bg-white/3 backdrop-blur-3xl rounded-[32px] border border-white/10 shadow-2xl flex overflow-hidden relative">
-        {/* 左侧侧边栏 */}
-        <aside className="w-64 border-r border-white/5 flex flex-col p-6 bg-black/20 shrink-0">
-          <div className="flex items-center gap-3 mb-10 px-2 group cursor-default">
-            {/* 修改：侧边栏应用 Logo */}
-            <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-600/20 overflow-hidden group-hover:scale-110 transition-transform">
-              <img src="/logo.png" className="w-full h-full object-contain" alt="Logo" />
+      <div className="h-screen w-screen bg-[#020617] text-white overflow-hidden flex items-center justify-center select-none">
+        <div className="w-full h-full bg-white/3 backdrop-blur-3xl rounded-[32px] border border-white/10 shadow-2xl flex overflow-hidden relative">
+          <aside className="w-64 border-r border-white/5 flex flex-col p-6 bg-black/20 shrink-0">
+            <div className="flex items-center gap-3 mb-10 px-2 group cursor-default">
+              <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-600/20 overflow-hidden group-hover:scale-110 transition-transform">
+                <img src={logo} className="w-full h-full object-contain" alt="Logo" />
+              </div>
+              <span className="font-bold text-xl tracking-tight bg-linear-to-r from-amber-200 to-amber-500 bg-clip-text text-transparent">金丝楠音乐</span>
             </div>
-            <span className="font-bold text-xl tracking-tight bg-linear-to-r from-amber-200 to-amber-500 bg-clip-text text-transparent">金丝楠音乐</span>
-          </div>
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/10 border border-white/10 text-white font-medium shadow-inner"><ListMusic size={18} className="text-amber-500" /> 本地音乐库</button>
-        </aside>
+            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/10 border border-white/10 text-white font-medium shadow-inner"><ListMusic size={18} className="text-amber-500" /> 本地音乐库</button>
+          </aside>
 
-        {/* 主内容区域 */}
-        <main className="flex-1 flex flex-col min-w-0">
-          <header className="h-20 flex items-center justify-between px-8 shrink-0">
-            <h2 className="text-xl font-semibold text-white/90 underline decoration-amber-500/30 underline-offset-8">全部音乐 ({tracks.length})</h2>
-            <button onClick={handleImport} className="flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 rounded-full text-xs font-bold transition-all shadow-lg shadow-amber-600/20 active:scale-95"><FolderOpen size={16} /> 导入音乐</button>
-          </header>
+          <main className="flex-1 flex flex-col min-w-0">
+            <header className="h-20 flex items-center justify-between px-8 shrink-0">
+              <h2 className="text-xl font-semibold text-white/90 underline decoration-amber-500/30 underline-offset-8">全部音乐 ({tracks.length})</h2>
+              <button onClick={handleImport} className="flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-500 rounded-full text-xs font-bold transition-all shadow-lg shadow-amber-600/20 active:scale-95"><FolderOpen size={16} /> 导入音乐</button>
+            </header>
 
-          <div className="flex-1 overflow-y-auto px-8 pb-40 custom-scrollbar">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 pt-4">
-              {tracks.map((track, i) => (
-                <div key={i} onClick={() => playAtIndex(i)} className="group cursor-pointer">
-                  <div className={`relative aspect-square rounded-2xl overflow-hidden mb-3 shadow-lg border transition-all ${currentIdx === i ? 'border-amber-500 ring-4 ring-amber-500/20 scale-95' : 'border-white/5 group-hover:border-white/10 group-hover:shadow-amber-500/5'}`}>
-                    {track.cover ? <img src={track.cover} className="object-cover w-full h-full transition duration-500 group-hover:scale-110" /> : <div className="w-full h-full bg-slate-900 flex items-center justify-center opacity-40"><img src="/logo.png" className="w-12 h-12 grayscale opacity-30 object-contain" /></div>}
-                    <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${currentIdx === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                      {currentIdx === i && isPlaying ? <div className="flex gap-1 items-end h-6"><div className="w-1.5 bg-amber-400 animate-bounce h-full"></div><div className="w-1.5 bg-amber-400 animate-bounce h-4"></div><div className="w-1.5 bg-amber-400 animate-bounce h-6"></div></div> : <Play fill="white" size={28} className="text-white ml-1" />}
+            <div className="flex-1 overflow-y-auto px-8 pb-40 custom-scrollbar">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6 pt-4">
+                {tracks.map((track, i) => (
+                  <div key={i} onClick={() => playAtIndex(i)} className="group cursor-pointer">
+                    <div className={`relative aspect-square rounded-2xl overflow-hidden mb-3 shadow-lg border transition-all ${currentIdx === i ? 'border-amber-500 ring-4 ring-amber-500/20 scale-95' : 'border-white/5 group-hover:border-white/10 group-hover:shadow-amber-500/5'}`}>
+                      {track.cover ? <img src={track.cover} className="object-cover w-full h-full transition duration-500 group-hover:scale-110" /> : <div className="w-full h-full bg-slate-900 flex items-center justify-center opacity-40"><img src={logo} className="w-12 h-12 grayscale opacity-30 object-contain" /></div>}
+                      <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${currentIdx === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                        {currentIdx === i && isPlaying ? <div className="flex gap-1 items-end h-6"><div className="w-1.5 bg-amber-400 animate-bounce h-full"></div><div className="w-1.5 bg-amber-400 animate-bounce h-4"></div><div className="w-1.5 bg-amber-400 animate-bounce h-6"></div></div> : <Play fill="white" size={28} className="text-white ml-1" />}
+                      </div>
                     </div>
+                    <h3 className={`font-medium truncate text-sm transition-colors ${currentIdx === i ? 'text-amber-400' : 'text-white/90'}`}>{track.name}</h3>
+                    <p className="text-xs text-white/40 truncate mt-0.5">{track.artist}</p>
                   </div>
-                  <h3 className={`font-medium truncate text-sm transition-colors ${currentIdx === i ? 'text-amber-400' : 'text-white/90'}`}>{track.name}</h3>
-                  <p className="text-xs text-white/40 truncate mt-0.5">{track.artist}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
 
-        {/* 底部播放栏 */}
-        <footer className="absolute bottom-6 left-6 right-6 h-24 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-[28px] shadow-2xl flex items-center px-8 z-50">
-          <div className="flex items-center gap-4 w-[25%] min-w-0">
-            <div onClick={() => setIsDetailOpen(true)} className="w-14 h-14 rounded-xl overflow-hidden shadow-lg ring-1 ring-white/20 shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-all bg-amber-500/10 flex items-center justify-center">
-              {currentTrack?.cover ? (
-                <img src={currentTrack.cover} className="w-full h-full object-cover" />
-              ) : (
-                /* 修改：没选歌曲时显示 Logo 占位 */
-                <img src="/logo.png" className="w-full h-full opacity-20 object-contain" />
-              )}
+          {/* 底部播放栏 */}
+          <footer className="absolute bottom-6 left-6 right-6 h-24 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-[28px] shadow-2xl flex items-center px-8 z-50">
+            <div className="flex items-center gap-4 w-[25%] min-w-0">
+              <div onClick={() => setIsDetailOpen(true)} className="w-14 h-14 rounded-xl overflow-hidden shadow-lg ring-1 ring-white/20 shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-all bg-amber-500/10 flex items-center justify-center">
+                {currentTrack?.cover ? <img src={currentTrack.cover} className="w-full h-full object-cover" /> : <img src={logo} className="w-full h-full opacity-20 object-contain" />}
+              </div>
+              <div className="min-w-0">
+                <h4 onClick={() => setIsDetailOpen(true)} className="font-bold text-white truncate text-sm cursor-pointer hover:text-amber-400 transition-colors">{currentTrack?.name || "金丝楠音乐"}</h4>
+                <p className="text-xs text-white/40 truncate">{currentTrack?.artist || "等待播放"}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h4 onClick={() => setIsDetailOpen(true)} className="font-bold text-white truncate text-sm cursor-pointer hover:text-amber-400 transition-colors">{currentTrack?.name || "金丝楠音乐"}</h4>
-              <p className="text-xs text-white/40 truncate">{currentTrack?.artist || "等待播放"}</p>
-            </div>
-          </div>
 
-          <div className="flex-1 flex flex-col items-center gap-2">
-            <div className="flex items-center gap-6">
-              <button onClick={() => setPlayMode(prev => prev === 'sequence' ? 'shuffle' : prev === 'shuffle' ? 'loop' : 'sequence')} className="text-white/20 hover:text-white transition active:scale-90">
-                {playMode === 'sequence' && <Repeat size={18} />}
-                {playMode === 'shuffle' && <Shuffle size={18} className="text-amber-500" />}
-                {playMode === 'loop' && <Repeat1 size={18} className="text-amber-500" />}
-              </button>
-              <button onClick={() => playAtIndex((currentIdx - 1 + tracks.length) % tracks.length)} className="text-white/40 hover:text-white transition active:scale-90"><SkipBack size={22} fill="currentColor" /></button>
-              <button onClick={() => isPlaying ? audioRef.current?.pause() : audioRef.current?.play()} className="w-12 h-12 bg-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition shadow-xl shadow-amber-500/5">
-                {isPlaying ? <Pause fill="black" size={24} className="text-black" /> : <Play fill="black" size={24} className="ml-1 text-black" />}
-              </button>
-              <button onClick={() => playAtIndex((currentIdx + 1) % tracks.length)} className="text-white/40 hover:text-white transition active:scale-90"><SkipForward size={22} fill="currentColor" /></button>
-              <button className="text-white/20 hover:text-pink-500 transition active:scale-90"><Heart size={18} /></button>
+            <div className="flex-1 flex flex-col items-center gap-2">
+              <div className="flex items-center gap-6">
+                <ModeIcon />
+                <button onClick={() => playAtIndex((currentIdx - 1 + tracks.length) % tracks.length)} className="text-white/40 hover:text-white transition active:scale-90"><SkipBack size={22} fill="currentColor" /></button>
+                <button onClick={() => isPlaying ? audioRef.current?.pause() : audioRef.current?.play()} className="w-12 h-12 bg-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition shadow-xl shadow-amber-500/5">
+                  {isPlaying ? <Pause fill="black" size={24} className="text-black" /> : <Play fill="black" size={24} className="ml-1 text-black" />}
+                </button>
+                <button onClick={() => playAtIndex((currentIdx + 1) % tracks.length)} className="text-white/40 hover:text-white transition active:scale-90"><SkipForward size={22} fill="currentColor" /></button>
+                <button className="text-white/20 hover:text-pink-500 transition active:scale-90"><Heart size={18} /></button>
+              </div>
+              <div className="w-full max-w-xl flex items-center gap-3">
+                <span className="text-[10px] text-white/40 font-mono w-10 text-right">{formatTime(rawTime)}</span>
+                <input
+                  type="range" min="0" max="100" step="0.01"
+                  value={progress}
+                  onMouseDown={() => setIsDragging(true)}
+                  onMouseUp={() => setIsDragging(false)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setProgress(val);
+                    if (audioRef.current) audioRef.current.currentTime = (val / 100) * audioRef.current.duration;
+                  }}
+                  style={{ background: `linear-gradient(to right, #f59e0b ${progress}%, rgba(255,255,255,0.1) ${progress}%)` }}
+                  className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-transparent slider-thumb-custom"
+                />
+                <span className="text-[10px] text-white/40 font-mono w-10">{formatTime(duration)}</span>
+              </div>
             </div>
-            <div className="w-full max-w-xl flex items-center gap-3">
-              <span className="text-[10px] text-white/40 font-mono w-10 text-right">{formatTime(rawTime)}</span>
-              <input type="range" min="0" max="100" step="0.1" value={progress} onChange={(e) => {
-                if (audioRef.current) audioRef.current.currentTime = (parseFloat(e.target.value) / 100) * audioRef.current.duration;
-              }} className="flex-1 h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-amber-500" />
-              <span className="text-[10px] text-white/40 font-mono w-10">{formatTime(duration)}</span>
-            </div>
-          </div>
 
-          <div className="w-[25%] flex items-center justify-end gap-3 group/vol">
-            <Volume2 size={18} className="text-amber-500/60" />
-            <input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              setVolume(val);
-              if (audioRef.current) audioRef.current.volume = val;
-            }} className="w-24 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-amber-500" />
-          </div>
-        </footer>
+            <div className="w-[25%] flex items-center justify-end gap-3 group/vol">
+              <Volume2 size={18} className="text-amber-500/60" />
+              <input
+                type="range" min="0" max="1" step="0.01"
+                value={volume}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setVolume(val);
+                  if (audioRef.current) audioRef.current.volume = val;
+                }}
+                style={{ background: `linear-gradient(to right, #f59e0b ${volume * 100}%, rgba(255,255,255,0.1) ${volume * 100}%)` }}
+                className="w-24 h-1 rounded-full appearance-none cursor-pointer accent-transparent slider-thumb-custom"
+              />
+            </div>
+          </footer>
+        </div>
+        <style>{`
+        .slider-thumb-custom::-webkit-slider-thumb {
+          appearance: none;
+          width: 12px;
+          height: 12px;
+          background: white;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2px solid #f59e0b;
+          box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .slider-thumb-custom:hover::-webkit-slider-thumb {
+          transform: scale(1.2);
+        }
+      `}</style>
       </div>
     </div>
   );
